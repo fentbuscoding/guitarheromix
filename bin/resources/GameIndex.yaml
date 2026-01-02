@@ -73186,6 +73186,18 @@ SLUS-21672:
     halfPixelOffset: 4 # Mostly aligns post-processing.
     nativeScaling: 1 # Fixes post-processing smoothness and position.
     getSkipCount: "GSC_GuitarHero"
+GHMX-2009:
+  name: "Guitar Hero Mix"
+  region: "NTSC-U"
+  compat: 5
+  roundModes:
+    vu1RoundMode: 0 # Fixes HUD elements relying on GH2/3 engine rounding.
+  gsHWFixes:
+    textureInsideRT: 1 # Crowd textures.
+    autoFlush: 1 # Fixes bloom intensity.
+    halfPixelOffset: 4 # Mostly aligns post-processing.
+    nativeScaling: 1 # Fixes post-processing smoothness and position.
+    getSkipCount: "GSC_GuitarHero"
 SLUS-21673:
   name: "College Hoops 2K8"
   region: "NTSC-U"
