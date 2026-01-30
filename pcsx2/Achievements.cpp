@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2002-2025 PCSX2 Dev Team
+// SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "Achievements.h"
@@ -26,6 +26,7 @@
 #include "common/MD5Digest.h"
 #include "common/Path.h"
 #include "common/ScopedGuard.h"
+#include "common/SettingsInterface.h"
 #include "common/SmallString.h"
 #include "common/StringUtil.h"
 #include "common/Timer.h"
@@ -439,7 +440,25 @@ bool Achievements::Initialize()
 		IdentifyGame(VMManager::GetDiscCRC(), VMManager::GetCurrentCRC());
 
 	const std::string username = Host::GetBaseStringSettingValue("Achievements", "Username");
-	const std::string api_token = Host::GetBaseStringSettingValue("Achievements", "Token");
+
+	// Check the base settings file to see if the token is defined inside. Move if found.
+	std::string oldToken = Host::GetBaseStringSettingValue("Achievements", "Token");
+	if (!oldToken.empty())
+	{
+		auto secretsLock = Host::GetSecretsSettingsLock();
+		SettingsInterface* secretsInterface = Host::Internal::GetSecretsSettingsLayer();
+		secretsInterface->SetStringValue("Achievements", "Token", oldToken.c_str());
+		secretsInterface->Save();
+		
+		oldToken.clear();
+		
+		auto baseLock = Host::GetSettingsLock();
+		SettingsInterface* baseInterface = Host::Internal::GetBaseSettingsLayer();
+		baseInterface->DeleteValue("Achievements", "Token");
+		baseInterface->Save();
+	}
+
+	const std::string api_token = Host::GetStringSettingValue("Achievements", "Token");
 	if (!username.empty() && !api_token.empty())
 	{
 		Console.WriteLn("Achievements: Attempting login with user '%s'...", username.c_str());
@@ -1024,20 +1043,10 @@ void Achievements::ClientLoadGameCallback(int result, const char* error_message,
 	s_has_leaderboards = has_leaderboards;
 	s_has_rich_presence = rc_client_has_rich_presence(client);
 	s_game_icon = {};
-	s_game_icon_url = {};
+	s_game_icon_url = info->badge_url;
 
 	// ensure fullscreen UI is ready for notifications
 	MTGS::RunOnGSThread(&ImGuiManager::InitializeFullscreenUI);
-
-	char url_buffer[URL_BUFFER_SIZE];
-	if (int err = rc_client_game_get_image_url(info, url_buffer, std::size(url_buffer)); err == RC_OK)
-	{
-		s_game_icon_url = url_buffer;
-	}
-	else
-	{
-		ReportRCError(err, "rc_client_game_get_image_url() failed: ");
-	}
 
 	if (const std::string_view badge_name = info->badge_name; !badge_name.empty())
 	{
@@ -1785,9 +1794,12 @@ void Achievements::ClientLoginWithPasswordCallback(int result, const char* error
 
 	// Store configuration.
 	Host::SetBaseStringSettingValue("Achievements", "Username", params->username);
-	Host::SetBaseStringSettingValue("Achievements", "Token", user->token);
 	Host::SetBaseStringSettingValue("Achievements", "LoginTimestamp", fmt::format("{}", std::time(nullptr)).c_str());
 	Host::CommitBaseSettingChanges();
+	
+	SettingsInterface* secretsInterface = Host::Internal::GetSecretsSettingsLayer();
+	secretsInterface->SetStringValue("Achievements", "Token", user->token);
+	secretsInterface->Save();
 
 	ShowLoginSuccess(client);
 }
@@ -1887,9 +1899,13 @@ void Achievements::Logout()
 
 	Console.WriteLn("Achievements: Clearing credentials...");
 	Host::RemoveBaseSettingValue("Achievements", "Username");
-	Host::RemoveBaseSettingValue("Achievements", "Token");
 	Host::RemoveBaseSettingValue("Achievements", "LoginTimestamp");
 	Host::CommitBaseSettingChanges();
+
+	auto secretsLock = Host::GetSecretsSettingsLock();
+	SettingsInterface* secretsInterface = Host::Internal::GetSecretsSettingsLayer();
+	secretsInterface->DeleteValue("Achievements", "Token");
+	secretsInterface->Save();
 }
 
 
